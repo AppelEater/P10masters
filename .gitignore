@@ -1,2 +1,14 @@
 gpw_v4_population*
 gpw-v4*
+
+__pycache__/
+*.py[cod]
+
+venv/
+
+.ipynb_checkpoints/
+
+.DS_Store
+
+# Logs
+*.log
