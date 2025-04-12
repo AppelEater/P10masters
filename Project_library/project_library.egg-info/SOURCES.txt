@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+Project_library/__init__.py
+Project_library/core.py
+Project_library/user_core.py
+project_library.egg-info/PKG-INFO
+project_library.egg-info/SOURCES.txt
+project_library.egg-info/dependency_links.txt
+project_library.egg-info/top_level.txt
+tests/test_core.py

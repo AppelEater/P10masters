@@ -10,5 +10,8 @@ venv/
 
 .DS_Store
 
+ProjectProject_library/project_library.egg-info/*
+ProjectProject_library/build/*
+
 # Logs
 *.log

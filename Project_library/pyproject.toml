@@ -1,0 +1,15 @@
+[project]
+name = "project_library"
+version = "0.1.0"
+description = "A project library for evaluating BH in satellite systems."
+authors = [
+  { name="David Johansen", email="david@vajo.dk" }
+]
+
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = []
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
