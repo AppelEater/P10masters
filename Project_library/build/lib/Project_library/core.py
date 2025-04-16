@@ -5,14 +5,15 @@ import jax.numpy as jnp
 
 from jax import jit, vmap
 
+import typing
 
 
 def test():
     print("This is a test function from the core module.")
-    return True
+    
 
 @jit
-def spherical_to_cartesian(latitude, longitude):
+def spherical_to_cartesian(radius,latitude, longitude):
     """
     Converts spherical coordinates (latitude and longitude) to Cartesian coordinates (x, y, z).
 
@@ -26,11 +27,27 @@ def spherical_to_cartesian(latitude, longitude):
         - y (float or ndarray): Cartesian y-coordinate.
         - z (float or ndarray): Cartesian z-coordinate.
     """
-    x = jnp.cos(longitude) * jnp.cos(latitude)  # Longitude
-    y = jnp.cos(latitude) * jnp.sin(longitude)
-    z = jnp.sin(latitude)  # Example function for z value
+    x = radius*jnp.cos(longitude) * jnp.cos(latitude)  # Longitude
+    y = radius*jnp.cos(latitude) * jnp.sin(longitude)
+    z = radius*jnp.sin( latitude)  # Example function for z value
     return x, y, z
 
+
+@jax.jit
+def calculate_distance(x_user, y_user, z_user, satellite_position: jax.typing.ArrayLike) -> float:
+    """Calculate the distance between a user and a satellite."""
+    # Calculate the distance using the Euclidean formula
+    return jnp.sqrt((satellite_position[0] - x_user) ** 2 + (satellite_position[1] - y_user) ** 2 + (satellite_position[2] - z_user) ** 2)
+
+# Calculate the elevation angle of the satellite
+@jax.jit
+def calculate_elevation(x_user, y_user, z_user, satellite_position : jax.typing.ArrayLike) -> float:
+    user_pos = jnp.asarray((x_user, y_user, z_user))
+    elev = jnp.arcsin(jnp.dot(satellite_position-user_pos, user_pos/jnp.linalg.norm(user_pos))/jnp.linalg.norm(satellite_position-user_pos))
+    return elev
+
+calculate_distances = vmap(calculate_distance, in_axes=(0, 0, 0, None))
+calculate_elevations = vmap(calculate_elevation, in_axes=(0, 0, 0, None))
 
 def generate_latitude_longitude_points(NumberOfPointsAlonglatitude, NumberOfPointsAlonglongitude, range_of_latitude = [-jnp.pi / 2, jnp.pi / 2], range_of_longitude = [-jnp.pi, jnp.pi]):
     """
@@ -47,9 +64,10 @@ def generate_latitude_longitude_points(NumberOfPointsAlonglatitude, NumberOfPoin
         - latitude (ndarray): 2D array of latitude values.
         - longitude (ndarray): 2D array of longitude values.
     """
-    latitude = jnp.linspace(range_of_latitude[0], range_of_latitude[1], NumberOfPointsAlonglatitude)
-    longitude = jnp.linspace(range_of_longitude[0], range_of_longitude[1], NumberOfPointsAlonglongitude)
-    cell_mesh = jnp.meshgrid(latitude, longitude)
+    latitude = jnp.linspace(range_of_latitude[0], range_of_latitude[1], NumberOfPointsAlonglatitude*2+1)
+    longitude = jnp.linspace(range_of_longitude[0], range_of_longitude[1], NumberOfPointsAlonglongitude*2+1)
+    
+    cell_mesh = jnp.meshgrid(latitude[1::2], longitude[1::2], indexing='ij')
     return cell_mesh
 
 
@@ -99,12 +117,48 @@ def generate_latitude_longitude_divisions(NumberOfPointsAlonglatitude, NumberOfP
         - latitude (ndarray): 1D array of latitude values.
         - longitude (ndarray): 1D array of longitude values.
     """
-    off_set_latitude = (range_of_latitude[1] - range_of_latitude[0]) / (NumberOfPointsAlonglatitude * 2)
-    off_set_longitude = (range_of_longitude[1] - range_of_longitude[0]) / (NumberOfPointsAlonglongitude * 2)
+    latitude_divisions = jnp.linspace(range_of_latitude[0], range_of_latitude[1], NumberOfPointsAlonglatitude*2+1)
+    longitude_divisions = jnp.linspace(range_of_longitude[0], range_of_longitude[1], NumberOfPointsAlonglongitude*2+1)
 
-    range_of_latitude = [range_of_latitude[0] + off_set_latitude, range_of_latitude[1] - off_set_latitude]
-    range_of_longitude = [range_of_longitude[0] + off_set_longitude, range_of_longitude[1] - off_set_longitude]
 
-    latitude = jnp.linspace(range_of_latitude[0], range_of_latitude[1], NumberOfPointsAlonglatitude)
-    longitude = jnp.linspace(range_of_longitude[0], range_of_longitude[1], NumberOfPointsAlonglongitude)
-    return latitude, longitude
+    return latitude_divisions[0::2], longitude_divisions[0::2]
+
+@jit
+def calculate_area_on_sphere(radius, latitude_divisions, longitude_divisions):
+    """
+    Calculates the area on a sphere defined by the latitude and longitude divisions.
+
+    Parameters:
+    radius (float): Radius of the sphere.
+    latitude_divisions (ndarray): 1D array of latitude divisions in radians.
+    longitude_divisions (ndarray): 1D array of longitude divisions in radians.
+
+    Returns:
+    float: Area on the sphere defined by the latitude and longitude divisions.
+    """
+    # Calculate the area of each cell on the sphere
+
+    area = radius**2 * jnp.diff(jnp.asarray(longitude_divisions)) * (jnp.sin( latitude_divisions[1])-jnp.sin(latitude_divisions[0]))
+    
+    return area
+
+@jit
+def locate_user_cell(lat_user, long_user, latitude_divsions, longitude_divisions):
+    """
+    Locates the cell in which a user is located based on their latitude and longitude.
+
+    Parameters:
+    lat_user (float): Latitude of the user in radians.
+    long_user (float): Longitude of the user in radians.
+    latitude_divsions (ndarray): 1D array of latitude divisions in radians.
+    longitude_divisions (ndarray): 1D array of longitude divisions in radians.
+
+    Returns:
+    tuple: A tuple containing the indices of the cell in which the user is located.
+        - lat_index (int): Index of the latitude division.
+        - long_index (int): Index of the longitude division.
+    """
+    lat_index = jnp.searchsorted(lat_user, latitude_divsions) - 1
+    long_index = jnp.searchsorted(long_user, longitude_divisions) - 1
+
+    return lat_index, long_index
