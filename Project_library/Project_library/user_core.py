@@ -21,4 +21,16 @@ class User(typing.NamedTuple):
     def __repr__(self):
         return f"User(id={self.id} \n lat={self.latitude} \n lon={self.longitude})"
 
+class square_cell(typing.NamedTuple):
+    """A class representing a square cell."""
+    # Define the fields of the named tuple
+    lat: float  # Latitude of the cell center
+    longi: float  # Longitude of the cell center
+    lat_width : typing.List[float]  # Latitude range of the cell
+    longi_width : typing.List[float]  # Longitude range of the cell
+    density: float  # Density of users in the cell
+    id: int  # ID of the cell
+    users_amount : int = 0  # Number of users in the cell
+    users: User = 0  # List of users in the cell
+
 
