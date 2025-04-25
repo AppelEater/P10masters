@@ -32,6 +32,27 @@ def spherical_to_cartesian(radius,latitude, longitude):
     z = radius*jnp.sin( latitude)  # Example function for z value
     return x, y, z
 
+@jit
+def cartesian_to_spherical(x, y, z):
+    """
+    Converts Cartesian coordinates (x, y, z) to spherical coordinates (radius, latitude, longitude).
+
+    Parameters:
+    x (float or ndarray): Cartesian x-coordinate.
+    y (float or ndarray): Cartesian y-coordinate.
+    z (float or ndarray): Cartesian z-coordinate.
+
+    Returns:
+    tuple: A tuple containing the spherical coordinates (radius, latitude, longitude).
+        - radius (float or ndarray): Distance from the origin.
+        - latitude (float or ndarray): Latitude in radians. Range: [-π/2, π/2]
+        - longitude (float or ndarray): Longitude in radians. Range: [-π, π]
+    """
+    radius = jnp.sqrt(x**2 + y**2 + z**2)
+    latitude = jnp.arcsin(z / radius)
+    longitude = jnp.arctan2(y, x)
+    return radius, latitude, longitude
+
 
 @jax.jit
 def calculate_distance(x_user, y_user, z_user, satellite_position: jax.typing.ArrayLike) -> float:
