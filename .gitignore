@@ -15,3 +15,5 @@ Project_library/build/*
 
 # Logs
 *.log
+
+Project_library/project_library.egg-info/*
