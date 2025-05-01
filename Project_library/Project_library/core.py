@@ -179,7 +179,76 @@ def locate_user_cell(lat_user, long_user, latitude_divsions, longitude_divisions
         - lat_index (int): Index of the latitude division.
         - long_index (int): Index of the longitude division.
     """
-    lat_index = jnp.searchsorted(lat_user, latitude_divsions) - 1
-    long_index = jnp.searchsorted(long_user, longitude_divisions) - 1
+    lat_index = jnp.searchsorted(latitude_divsions,lat_user) - 1
+    long_index = jnp.searchsorted(longitude_divisions,long_user) - 1
 
     return lat_index, long_index
+
+@jax.jit
+def visible_angle(min_observation, satellite_position : jnp.ndarray) -> tuple[float, float, float, float, float, float]:
+    """Calculate the visible angle area of a satellite given its position.
+
+    Args:
+        min_observation (float): The minimum observational angle in radians.
+        satellite_position (jnp.ndarray): The position of the satellite in Cartesian coordinates.
+
+    Returns:
+        tuple: A tuple containing the visible area and the radius of the visible area.
+    """
+    # Calculate the distance from the satellite to the center of the Earth
+    distance = jnp.linalg.norm(satellite_position)
+    # Calculate the radius of the Earth
+    earth_radius = 6371  # in km
+
+    #Intermediate calculation
+    bing = jnp.sin(min_observation+jnp.pi/2)
+
+    # Calculate the angle of the satellite
+    alpha = jnp.arcsin(earth_radius*bing/distance)
+    # Calculate the angle from the center of the earth
+    lat_width = jnp.pi/2 - alpha - min_observation
+
+    # Calculate the spherical value of the satellite
+    radius, longitude, latitude = cartesian_to_spherical(*satellite_position)
+    
+    # Define the ranges of the visible area
+    lat_range = (latitude - lat_width, latitude + lat_width)
+    lon_range = (longitude - lat_width, longitude + lat_width)    
+
+
+    return lat_range, lon_range, radius, alpha, distance, lat_width
+
+@jax.jit
+def calculate_if_cells_within_visible_area(
+        cell_latitude_list: float,
+        cell_longitude_list: float,
+        satellite_latitude: float,
+        satellite_longitude: float,
+        satellite_height: float,
+        alpha : float,
+        earth_radius: float = 6371.0) -> bool:
+    """Check if a cell is within the visible area of a satellite.
+        cell_latitude_list: Latitude of the cells in degrees.
+        cell_longitude_list: Longitude of the cell in degrees.
+        satellite_latitude: Latitude of the satellite in degrees.
+        satellite_longitude: Longitude of the satellite in degrees.
+        satellite_height: Height of the satellite in kilometers.
+        alpha: Angle of visibility in degrees.
+    """
+    
+    phi_s, lam_s, alpha = jnp.deg2rad(jnp.asarray([satellite_latitude, satellite_longitude, alpha]))
+    cos_alpha  = jnp.cos(alpha)
+
+    # Make into a tensor
+    phi_c  = jnp.deg2rad(cell_latitude_list)[:, None]          # (N,1)
+    lam_c  = jnp.deg2rad(cell_longitude_list)[None, :]          # (1,M)
+
+    sin_phi_s, cos_phi_s = jnp.sin(phi_s), jnp.cos(phi_s)
+    sin_phi_c, cos_phi_c = jnp.sin(phi_c), jnp.cos(phi_c)
+
+    # Calculate the angle from the center of the earth
+    cos_dsigma = (sin_phi_s * sin_phi_c +
+                  cos_phi_s * cos_phi_c * jnp.cos(lam_c - lam_s))
+    
+    # Calculate the conditional
+    return cos_dsigma >= cos_alpha

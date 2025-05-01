@@ -106,6 +106,8 @@ def test_locate_user_cell():
 	# Test the function with a user located at the center of the first cell
 	lat_user = mesh_grid[0][0][0]
 	long_user = mesh_grid[1][0][0]
+	print(lat_divisions, long_divisions)
+	print(lat_user, long_user)
 	lat_index, long_index = locate_user_cell(lat_user, long_user, lat_divisions, long_divisions)
 
 	assert lat_index == 0, "Latitude index mismatch"
@@ -126,3 +128,43 @@ def test_locate_user_cell():
 
 	assert lat_index == 2, "Latitude index mismatch"
 	assert long_index == 2, "Longitude index mismatch"
+
+def test_calculate_cells_within_area():
+	# Split the sphere into nine cells
+	NumberOfPointsAlonglatitude = 3
+	NumberOfPointsAlonglongitude = 3
+
+	mesh_grid = generate_latitude_longitude_points(NumberOfPointsAlonglatitude, NumberOfPointsAlonglongitude)
+
+	lat_divisions, long_divisions = generate_latitude_longitude_divisions(NumberOfPointsAlonglatitude, NumberOfPointsAlonglongitude)
+
+	# Test the function with a user located at the center of the first cell
+	lat_user = mesh_grid[0][0][0]
+	long_user = mesh_grid[1][0][0]
+
+	# Calculate the area of the first cell
+	cell_area = calculate_area_on_sphere(1,jnp.asarray([lat_divisions[0], lat_divisions[1]]), jnp.asarray([long_divisions[0], long_divisions[1]]))
+
+	sat_pos = jnp.array([0,0,600+6371])
+	_, _ ,_ , _, _, alpha= visible_angle(jnp.deg2rad(30), sat_pos)
+
+	#print(mesh_grid)
+
+	# Satellite position to spherical coordinates
+	r, lat, long = cartesian_to_spherical(*sat_pos)
+
+	cell_lat_list = jnp.rad2deg(mesh_grid[0].T[0]) 
+	cell_long_list = jnp.rad2deg(mesh_grid[1][0]) 
+	lat = jnp.rad2deg(lat-jnp.pi/2)
+	long = jnp.rad2deg(long)
+	alpha = jnp.rad2deg(alpha)
+
+
+	cells_within_area = calculate_if_cells_within_visible_area(cell_lat_list,cell_long_list, lat, long, 600,alpha)
+	assert cells_within_area.shape == (3,3), "Cells within area shape mismatch"
+	print(lat, long)
+	print(alpha)
+	print(cell_lat_list, cell_long_list)
+	print(cells_within_area)
+	assert cells_within_area[1][1] == 1, "Cells within area value mismatch"
+	assert cells_within_area[0][0] == 0, "Cells within area value mismatch"
