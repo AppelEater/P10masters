@@ -53,3 +53,35 @@ def create_user(id, lat_range, longi_range, key : jax.typing.ArrayLike) -> User:
         position=position,
         id=id
     )
+
+def visible_angle(min_observation, satellite_position : jnp.ndarray) -> tuple[float, float, float, float, float, float]:
+    """Calculate the visible angle area of a satellite given its position.
+
+    Args:
+        min_observation (float): The minimum observational angle in radians.
+        satellite_position (jnp.ndarray): The position of the satellite in Cartesian coordinates.
+
+    Returns:
+        tuple: A tuple containing the visible area and the radius of the visible area.
+    """
+    # Calculate the distance from the satellite to the center of the Earth
+    distance = jnp.linalg.norm(satellite_position)
+    # Calculate the radius of the Earth
+    earth_radius = 6371  # in km
+
+    #
+    bing = jnp.sin(min_observation+jnp.pi/2)
+
+    # Calculate the angle of the satellite
+    alpha = jnp.arcsin(earth_radius*bing/distance)
+    # Calculate the angle from the center of the earth
+    lat_width = jnp.pi/2 - alpha - min_observation
+
+    # Calculate the spherical value of the satellite
+    radius, longitude, latitude = pl.cartesian_to_spherical(*satellite_position)
+    
+    # Define the ranges of the visible area
+    lat_range = (latitude.item() - lat_width, latitude.item() + lat_width)
+    lon_range = (longitude.item() - lat_width, longitude.item() + lat_width)
+
+    return lat_range, lon_range, radius, alpha, distance, lat_width
