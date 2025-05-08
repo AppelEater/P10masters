@@ -30,8 +30,8 @@ class square_cell(typing.NamedTuple):
     longi_width : typing.List[float]  # Longitude range of the cell
     density: float  # Density of users in the cell
     id: int  # ID of the cell
+    users: list  # List of users in the cell
     users_amount : int = 0  # Number of users in the cell
-    users: User = 0  # List of users in the cell
 
 @jax.jit
 def create_user(id, lat_range, longi_range, key : jax.typing.ArrayLike) -> User:
