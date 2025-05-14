@@ -85,3 +85,35 @@ def visible_angle(min_observation, satellite_position : jnp.ndarray) -> tuple[fl
     lon_range = (longitude.item() - lat_width, longitude.item() + lat_width)
 
     return lat_range, lon_range, radius, alpha, distance, lat_width
+
+@jax.jit
+def calculate_demand_of_cell(cell : square_cell) -> float:
+    # Calculate the demand of the cell based on the users in it
+    demand = 0
+    for user in cell.users:
+        demand += user.demand
+
+    return demand
+
+@jax.jit
+def markov_step(state, key, A):
+    key, subkey = jax.random.split(key)
+    probs = A[state]  # Transition probabilities from current state
+    next_state = jax.random.choice(subkey, A.shape[0], p=probs)
+    return next_state, next_state
+
+
+def user_state_change(state_change_matrix : jnp.ndarray, state : int, time_series : jnp.ndarray, key : jnp.ndarray) -> jnp.ndarray:
+    # Create a copy of the state change matrix
+    
+    key = jax.random.split(key, time_series.shape[0]-1)
+
+    def scan_fn(state,key):
+        return markov_step(state, key, state_change_matrix)
+    
+    _, states = jax.lax.scan(scan_fn, state, key)
+
+    return jnp.concatenate([jnp.array([state]), states])
+
+# Vectorise the user vector
+users_state_change = jax.jit(jax.vmap(user_state_change, in_axes=(None, 0, 0, 0)))
