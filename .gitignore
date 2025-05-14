@@ -17,3 +17,5 @@ Project_library/build/*
 *.log
 
 Project_library/project_library.egg-info/*
+
+_ipython-input-*
