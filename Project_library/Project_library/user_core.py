@@ -9,6 +9,7 @@ from jax import jit, vmap
 
 import Project_library.core as pl
 
+from functools import partial
 
 class User(typing.NamedTuple):
     """A user class that represents a user with a unique ID and a list of items."""
@@ -117,3 +118,54 @@ def user_state_change(state_change_matrix : jnp.ndarray, state : int, time_serie
 
 # Vectorise the user vector
 users_state_change = jax.jit(jax.vmap(user_state_change, in_axes=(None, 0, 0, 0)))
+
+
+@partial(jax.jit, static_argnums=(2,3))
+def prediction_of_activity(
+    s: jnp.ndarray,    # shape (N,)
+    A: jnp.ndarray,    # shape (2,2)
+    O: int,            # # of time‐steps (dynamic)
+    N: int             # len(s) (static)
+) -> jnp.ndarray:
+    """
+    Returns an array of shape (O, N+1), where each row o is the
+    distribution over exactly k=0..N chains being on after o+1 steps.
+    """
+
+    # 1) Prepare the output buffer and the initial power A^0 = I
+    out0 = jnp.zeros((O, N + 1))
+    Ao0  = jnp.eye(2, dtype=A.dtype)
+
+    def body(o, state):
+        Ao, out_arr = state
+
+        # step Ao -> Ao @ A = A^(o+1)
+        Ao = Ao @ A
+
+        # extract flip probs
+        alpha = Ao[0, 1]
+        beta  = Ao[1, 0]
+
+        # per‐chain on‐probabilities
+        p = s * (1 - beta) + (1 - s) * alpha   # shape (N,)
+
+        # init DP for k=0..N
+        f0 = jnp.zeros(N + 1).at[0].set(1.0)
+
+        # one‐chain update: shift+mix
+        def update(f, pi):
+            shifted = jnp.pad(f[:-1], (1, 0))
+            return f * (1 - pi) + shifted * pi
+
+        # scan over all N chains
+        f_final, _ = jax.lax.scan(lambda f, pi: (update(f, pi), None),
+                                  f0, p)
+
+        # write row o = distribution _after_ o+1 steps
+        out_arr = out_arr.at[o].set(f_final)
+        return (Ao, out_arr)
+
+    # run the loop 0..O-1
+    _, result = jax.lax.fori_loop(0, O, body, (Ao0, out0))
+
+    return result  # shape (O, N+1)
