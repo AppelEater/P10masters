@@ -20,6 +20,8 @@ earth_radius = 6371 # km
 
 ##### Sweep paramters #####
 sweeping_parameters = {
+    "predction" : True,
+    "markov_period_step_size" : [0.1, 0.25, 0.5],
     "reconfig_period" : [1, 5, 10],
     "time_step" : [0.1, 0.25, 0.5],
     "rmin" : [1, 10000],
@@ -72,13 +74,15 @@ print("Minimum observation angle:   ", minimum_observation_angle, "degrees")
 print("Base user demand:            ", base_user_demand, "bps")
 print("Number of beams:             ", number_of_beams, "beams")
 
-def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_per_beam, beam_gain, beam_bandwidth, configuration_period, time_step, rmin, key):
+
+
+def optimise_allocation_of_beams_with_prediction(satellite_position, satellite_transmit_power_per_beam, beam_gain, beam_bandwidth, configuration_period, time_step, rmin, key):
     """
     Optimise the allocation of beams to cells.
     
     Args:
         satellite_position (jnp.ndarray): The position of the satellite in Cartesian coordinates """
-    ##### Intialise the cell area based on the cell size and satellite parameters #####
+    ##### Initialise the cell area based on the cell size and satellite parameters #####
 
     # Calculate the visble latitude and longitude range of the satellite
 
@@ -137,17 +141,13 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
     print()
     print("Calculating the distance from the satellite to the cells and demand from the cells...")
     distance = []
-    initial_demand = []
+    initial_demand= []
     for x in range(len(cells)):
         for y in range(len(cells[x])):
             if visibility_mask[x,y]:
                 position = pl.spherical_to_cartesian(earth_radius, cells[x][y].lat, cells[x][y].longi)
                 distance.append(pl.calculate_distance(position[0], position[1],position[2], satellite_position))
                 initial_demand.append(pl.calculate_demand_of_cell(cells[x][y]))
-
-    # Calculate the predicted demand of the cells
-      
-
 
     distance = jnp.asarray(distance)
 
@@ -156,7 +156,6 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
 
     snr = calculate_multiple_snr(satellite_transmit_power_per_beam, satellite_central_frequency, beam_bandwidth, distance, 0)
 
-    print("SNR : ", snr)
     rates = jax.vmap(pl.calculate_capacity, in_axes=(0,None))(snr, beam_bandwidth)
 
 
@@ -184,7 +183,6 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
     for k in K:
         problem.addConstr(t * (D[k]+rmin) <= weights[k] * gp.quicksum(x[i, k] for i in I),
                         name=f"Demand Constraint {k}")
-    print(B)
     for i in I:
         problem.addConstr(B >= gp.quicksum(x[i, k] for k in K) ,
                         name=f"beam_capacity_time_{i}")
@@ -224,15 +222,15 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
     ##### Calculate the measures of the optimisation #####
     # Calculate the minimum capacity to demand
     schedule = jnp.asarray(schedule)
-    demand = jnp.asarray(initial_demand)
+    initial_demand = jnp.asarray(initial_demand)
     achieved_capacity = jnp.multiply(jnp.sum(schedule, axis=0)/T, rates)
     min_capacity = jnp.min(achieved_capacity)
     avg_capacity = jnp.mean(achieved_capacity)
-    min_CD = jnp.min(jnp.divide(achieved_capacity, demand))
-    avg_CD = jnp.mean(jnp.divide(achieved_capacity, demand))
+    min_CD = jnp.min(jnp.divide(achieved_capacity, initial_demand))
+    avg_CD = jnp.mean(jnp.divide(achieved_capacity, initial_demand))
 
     # Dismetrics
-    unmet_demand = jnp.maximum(jnp.zeros_like(demand), demand - achieved_capacity)
+    unmet_demand = jnp.maximum(jnp.zeros_like(initial_demand), initial_demand - achieved_capacity)
     Average_unmet_demand = jnp.mean(unmet_demand)
     maximum_unmet_demand = jnp.max(unmet_demand)
 
@@ -264,64 +262,3 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
         print("Disconnect time:                  ", disconnect_time)
 
     return demand, schedule, min_capacity, avg_capacity, min_CD, avg_CD, Average_unmet_demand, maximum_unmet_demand, disconnect_time
-
-if __name__ == "__main__":    
-
-    key = jrandom.PRNGKey(11)
-
-    # What to pickle
-    pickle_data = {}
-    pickle_data["Config"] = sweeping_parameters
-
-    with open(f"results_sweep{int(time.time())}", "ab") as f: 
-        # Run the optimisation,
-        pkl.dump(pickle_data, f)
-
-        for reconfig_period in sweeping_parameters["reconfig_period"]:
-            for time_step in sweeping_parameters["time_step"]: 
-                for rmin in sweeping_parameters["rmin"]:
-                    
-                    con_sweep = {"reconfig_period": reconfig_period, "time_step": time_step, "rmin": rmin}
-                    data = []
-                                        
-                    for iter in range(sweeping_parameters["iterations"]):
-
-                        key, subkey = jrandom.split(key)    
-                        demand, schedule, min_capacity, avg_capacity, min_CD, avg_CD, Average_unmet_demand, maximum_unmet_demand, disconnect_time = optimise_allocation_of_beams(satellite_position,
-                                                     satellite_transmit_power_per_beam,
-                                                       beam_gain,
-                                                         beam_bandwidth,
-                                                           reconfig_period,
-                                                             time_step,
-                                                               rmin,
-                                                                 key)
-                    
-                        # Save the results
-                        data.append({
-                            "demand": demand,
-                            "schedule": schedule,
-                            "min_capacity": min_capacity,
-                            "avg_capacity": avg_capacity,
-                            "min_CD": min_CD,
-                            "avg_CD": avg_CD,
-                            "Average_unmet_demand": Average_unmet_demand,
-                            "maximum_unmet_demand": maximum_unmet_demand,
-                            "disconnect_time": disconnect_time
-                        })
-                
-                    con_sweep["data"] = data
-                    # Save the results
-                    pkl.dump(con_sweep, f)
-
-
-    plt.figure(figsize=(10, 6))
-    plt.hist(demand, bins=20)
-    print("Print the sum of beams over time",jnp.sum(schedule, axis=1))
-
-    # Plot histogram of the disconnect time
-    plt.figure(figsize=(10, 6)) 
-    plt.hist(disconnect_time, bins=20)
-    plt.xlabel("Disconnect time (s)")
-    plt.ylabel("Frequency")
-    plt.title("Disconnect time histogram")
-    plt.show()

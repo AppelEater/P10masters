@@ -168,3 +168,21 @@ def test_calculate_cells_within_area():
 	print(cells_within_area)
 	assert cells_within_area[1][1] == 1, "Cells within area value mismatch"
 	assert cells_within_area[0][0] == 0, "Cells within area value mismatch"
+
+
+def test_prediction():
+	# Test the prediction function
+
+	# Create a dummy set of users
+	s = jnp.array([0,0,1,0])
+
+	A = jnp.array([[0.8, 0.2], [0.1, 0.9]])
+
+	O = 3 # Number of time‐steps
+
+	N = s.shape[0] # Number of users
+
+	# Call the prediction function
+	predicted_probabilties = prediction_of_activity(s, A, O, N)
+
+	assert predicted_probabilties.shape == (O, N+1), "Prediction shape mismatch"
