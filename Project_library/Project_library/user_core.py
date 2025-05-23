@@ -104,7 +104,10 @@ def markov_step(state, key, A):
     return next_state, next_state
 
 
-def user_state_change(state_change_matrix : jnp.ndarray, state : int, time_series : jnp.ndarray, key : jnp.ndarray) -> jnp.ndarray:
+def user_state_change(state_change_matrix : jnp.ndarray,
+                     state : int,
+                     time_series : jnp.ndarray,
+                     key : jnp.ndarray) -> jnp.ndarray:
     # Create a copy of the state change matrix
     
     key = jax.random.split(key, time_series.shape[0]-1)
