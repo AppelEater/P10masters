@@ -252,3 +252,28 @@ def calculate_if_cells_within_visible_area(
     
     # Calculate the conditional
     return cos_dsigma >= cos_alpha
+
+@jax.jit
+def disconnect_time(v: jnp.ndarray, time_step) -> jnp.ndarray:
+    # Boolean mask for zeros
+    is_zero = (v == 0)
+
+    # Scanning function to compute lengths of consecutive zeros
+    def scan_fn(carry, x):
+        current_run = jnp.where(x, carry + 1, 0)
+        return current_run, current_run
+
+    # Scan over the boolean mask to get lengths of runs of zeros
+    _, runs = jax.lax.scan(scan_fn, jnp.array(0), is_zero)
+
+    
+    # Check the shifted version of the boolean mask to find run-ends, where a run of zeros ends
+    shifted = jnp.concatenate([is_zero[1:], jnp.array([False])])
+    run_ends = is_zero & (~shifted)
+
+    # Zero out everything except at run-ends
+    run_lengths = runs * run_ends
+
+    return run_lengths*time_step
+
+disconnect_times = jax.jit(jax.vmap(disconnect_time, in_axes=(0, None)))

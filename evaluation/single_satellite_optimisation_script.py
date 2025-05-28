@@ -20,10 +20,10 @@ earth_radius = 6371 # km
 
 ##### Sweep paramters #####
 sweeping_parameters = {
-    "reconfig_period" : [1, 5, 10],
-    "time_step" : [0.1, 0.25, 0.5],
-    "rmin" : [1, 10000],
-    "iterations" : 5
+    "reconfig_period" : [1],
+    "time_step" : [0.001],
+    "rmin" : [0, 50000, 10000],
+    "iterations" : 10 # Number of iterations for the sweep
 }
 
 
@@ -45,6 +45,7 @@ number_of_beams = 19 # Number of beams
 probability_vector_for_high_and_low_density = [0.2, 0.8] # Probability of high and low density. [p_high, p_low] 
 user_turn_on_probability = 0.8 # Probability of user turning on from off state
 user_turn_off_probability = 0.2 # Probability of user turning off from on state
+start_of_on_state = 0.6
 user_state_transition_probability = [[1-user_turn_on_probability, user_turn_on_probability],
                                       [user_turn_off_probability, 1-user_turn_off_probability]] # Transition probability matrix
 user_state_transition_probability = np.array(user_state_transition_probability)
@@ -108,7 +109,7 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
         cells_row = []
         for j in range(mesh_grid_comb.shape[1]):
             
-            density = jrandom.choice(key, jnp.array([3, 8]))
+            density = jrandom.choice(key, jnp.array(user_density), p=jnp.array(probability_vector_for_high_and_low_density))
 
             key, subkey = jrandom.split(key)
             user_list = []
@@ -116,7 +117,7 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
             for x in range(density):
                 key, subkey = jrandom.split(key)
                 #print(jrandom.choice(key, jnp.array([0,1]), p=jnp.array([0.1,0.9])))
-                user_list.append(pl.User(mesh_grid_comb[i,j,0], mesh_grid_comb[i,j,1], x, jrandom.choice(key, jnp.array([0,1])*base_user_demand, p=jnp.array([0.25,0.75]))))
+                user_list.append(pl.User(mesh_grid_comb[i,j,0], mesh_grid_comb[i,j,1], x, jrandom.choice(key, jnp.array([0,1])*base_user_demand, p=jnp.array([1-start_of_on_state,start_of_on_state]))))
             
             cells_row.append(pl.square_cell(
                 lat = mesh_grid_comb[i,j,0], 
@@ -156,7 +157,6 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
 
     snr = calculate_multiple_snr(satellite_transmit_power_per_beam, satellite_central_frequency, beam_bandwidth, distance, 0)
 
-    print("SNR : ", snr)
     rates = jax.vmap(pl.calculate_capacity, in_axes=(0,None))(snr, beam_bandwidth)
 
 
@@ -182,9 +182,8 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
     
     # Constraints
     for k in K:
-        problem.addConstr(t * (D[k]+rmin) <= weights[k] * gp.quicksum(x[i, k] for i in I),
+        problem.addConstr(t * jnp.maximum(D[k], rmin) <= weights[k] * gp.quicksum(x[i, k] for i in I),
                         name=f"Demand Constraint {k}")
-    print(B)
     for i in I:
         problem.addConstr(B >= gp.quicksum(x[i, k] for k in K) ,
                         name=f"beam_capacity_time_{i}")
@@ -192,16 +191,19 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
 
     # Gurobi parameters
     problem.Params.MIPGap    = 1e-4     # tighten or loosen tolerance
-    problem.Params.NodeLimit = node_limit # seconds
-    problem.Params.OutputFlag = 0        # suppress output
-
+    problem.Params.TimeLimit = 600      # seconds
+    problem.Params.OutputFlag = 1       # suppress output
+    problem.Params.Threads = 0 # use all available threads
+    problem.Params.MIPGap = 0.005
 
     print("Starting Optimisation")
 
     problem.optimize()
 
+    print("Optimisation finished with status: ", problem.Status)
+
     schedule = np.zeros((len(I), len(K)))  # rows = time steps, columns = cells
-    # Extract solution
+    # Extract solution, if there are multiple solution, take the first one 
     if problem.Status in {GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.NODE_LIMIT, GRB.SUBOPTIMAL}:
         for i_idx, i in enumerate(I):
             for k_idx, k in enumerate(K):
@@ -220,7 +222,10 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
         plt.ylabel("Cell ID (k)")
         plt.title("Beam allocation schedule")
         plt.colorbar(label="Allocated (1 = yes)")
+        plt.show()
 
+
+    print("Calculating the measures of the optimisation...")
     ##### Calculate the measures of the optimisation #####
     # Calculate the minimum capacity to demand
     schedule = jnp.asarray(schedule)
@@ -231,25 +236,16 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
     min_CD = jnp.min(jnp.divide(achieved_capacity, demand))
     avg_CD = jnp.mean(jnp.divide(achieved_capacity, demand))
 
+    print("Calculating dismetrics...")
     # Dismetrics
     unmet_demand = jnp.maximum(jnp.zeros_like(demand), demand - achieved_capacity)
     Average_unmet_demand = jnp.mean(unmet_demand)
     maximum_unmet_demand = jnp.max(unmet_demand)
 
-
-    diff = jnp.diff(schedule.astype(jnp.int32), axis=0)
     # Calculate the disconnect time
-    disconnect_time = []
-    for k in K:
-        if jnp.sum(jnp.abs(diff[:, k])) > 0:
-            for i in range(diff.shape[0]):
-                if diff[i, k] == -1:
-                    for j in range(i+1, diff.shape[0]):
-                        if diff[j,k] == 1:
-                            disconnect_time.append((j-i)*time_step)
-        else:
-            disconnect_time.append(30)
-        
+    print("Calculating disconnect time...")
+    disconnect_times = pl.disconnect_times(schedule.T, time_step)
+    
          
     for i in range(schedule.shape[0]):
         pass
@@ -261,9 +257,9 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
         print("Average capacity to demand ratio: ", avg_CD)
         print("Average unmet demand:             ", Average_unmet_demand)
         print("Maximum unmet demand:             ", maximum_unmet_demand)
-        print("Disconnect time:                  ", disconnect_time)
+        print("Disconnect time:                  ", disconnect_times)
 
-    return demand, schedule, min_capacity, avg_capacity, min_CD, avg_CD, Average_unmet_demand, maximum_unmet_demand, disconnect_time
+    return demand, schedule, min_capacity, avg_capacity, min_CD, avg_CD, Average_unmet_demand, maximum_unmet_demand, disconnect_times
 
 if __name__ == "__main__":    
 
@@ -287,7 +283,7 @@ if __name__ == "__main__":
                     for iter in range(sweeping_parameters["iterations"]):
 
                         key, subkey = jrandom.split(key)    
-                        demand, schedule, min_capacity, avg_capacity, min_CD, avg_CD, Average_unmet_demand, maximum_unmet_demand, disconnect_time = optimise_allocation_of_beams(satellite_position,
+                        demand, schedule, min_capacity, avg_capacity, min_CD, avg_CD, Average_unmet_demand, maximum_unmet_demand, disconnect_times = optimise_allocation_of_beams(satellite_position,
                                                      satellite_transmit_power_per_beam,
                                                        beam_gain,
                                                          beam_bandwidth,
@@ -306,7 +302,7 @@ if __name__ == "__main__":
                             "avg_CD": avg_CD,
                             "Average_unmet_demand": Average_unmet_demand,
                             "maximum_unmet_demand": maximum_unmet_demand,
-                            "disconnect_time": disconnect_time
+                            "disconnect_time": disconnect_times
                         })
                 
                     con_sweep["data"] = data
@@ -320,7 +316,7 @@ if __name__ == "__main__":
 
     # Plot histogram of the disconnect time
     plt.figure(figsize=(10, 6)) 
-    plt.hist(disconnect_time, bins=20)
+    plt.hist(disconnect_times, bins=20)
     plt.xlabel("Disconnect time (s)")
     plt.ylabel("Frequency")
     plt.title("Disconnect time histogram")
