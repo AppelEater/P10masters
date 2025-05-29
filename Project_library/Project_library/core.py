@@ -277,3 +277,26 @@ def disconnect_time(v: jnp.ndarray, time_step) -> jnp.ndarray:
     return run_lengths*time_step
 
 disconnect_times = jax.jit(jax.vmap(disconnect_time, in_axes=(0, None)))
+
+
+def calculate_pmf(A, active_users, M):
+    alpha = A[0, 1]
+    beta = A[1, 0]
+
+    M1 = active_users
+    M2 = M - M1
+
+    k1 = jnp.arange(M1+1)
+    k2 = jnp.arange(M2+1)
+
+    # Binomial Distribution of each case
+    Binom_from_on_to_on = jax.scipy.stats.binom.pmf(k1, n=M1, p=1-beta)
+    Binom_from_off_to_on = jax.scipy.stats.binom.pmf(k2, n=M2, p=alpha)
+
+    # Convolve the two distributions
+    convolved = jax.scipy.signal.convolve(Binom_from_on_to_on, Binom_from_off_to_on, mode='full')
+
+    # Normalize the convolved distribution
+    convolved = convolved / jnp.sum(convolved)
+
+    return convolved

@@ -19,3 +19,9 @@ Project_library/build/*
 Project_library/project_library.egg-info/*
 
 _ipython-input-*
+
+out.txt
+output.txt
+err.txt
+
+results_sweep*
