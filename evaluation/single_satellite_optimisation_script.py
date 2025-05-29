@@ -22,7 +22,7 @@ earth_radius = 6371 # km
 ##### Sweep paramters #####
 sweeping_parameters = {
     "reconfig_period" : [1],
-    "time_step" : [0.1],
+    "time_step" : [0.001],
     "rmin" : [0, 50000, 10000],
     "user_turn_on_probability" : [0.7],
     "user_turn_off_probability" : [0.3],
