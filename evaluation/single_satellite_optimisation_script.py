@@ -23,7 +23,7 @@ earth_radius = 6371 # km
 sweeping_parameters = {
     "reconfig_period" : [1],
     "time_step" : [0.001],
-    "rmin" : [0, 50000, 10000],
+    "rmin" : [0, 100000, 200000],
     "user_turn_on_probability" : [0.7],
     "user_turn_off_probability" : [0.3],
     "user_state_transition_probability" : [jnp.array([[1-0.7, 0.7],
@@ -57,8 +57,8 @@ start_of_on_state = 0.6
 #user_state_transition_probability = [[1-user_turn_on_probability, user_turn_on_probability],
 #                                      [user_turn_off_probability, 1-user_turn_off_probability]] # Transition probability matrix
 #user_state_transition_probability = np.array(user_state_transition_probability)
-high_density_user_amount = 50 # Number of users in high density
-low_density_user_amount = 10 # Number of users in low density
+high_density_user_amount = 400 # Number of users in high density
+low_density_user_amount = 80 # Number of users in low density
 user_density = [high_density_user_amount, low_density_user_amount] # Number of users in high and low density
 user_density = np.array(user_density)
 base_user_demand = 100e3
@@ -236,11 +236,10 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
             
 
         # Gurobi parameters
-        problem.Params.MIPGap    = 1e-4     # tighten or loosen tolerance
         problem.Params.TimeLimit = 600      # seconds
         problem.Params.OutputFlag = 1       # suppress output
         problem.Params.Threads = 0 # use all available threads
-        problem.Params.MIPGap = 0.005
+        problem.Params.MIPGap = 0.01 # set the MIP gap to 1%
 
         print("Starting Optimisation")
 
