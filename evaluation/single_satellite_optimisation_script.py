@@ -360,7 +360,7 @@ if __name__ == "__main__":
                         con_sweep = {"reconfig_period": reconfig_period, "time_step": time_step, "rmin": rmin, "O": o, "user_state_transition_probability": sweeping_parameters["user_state_transition_probability"]}
                         data = []
                                             
-                        for idx, iter in enumerate(sweeping_parameters["iterations"]):
+                        for idx in range(sweeping_parameters["iterations"]):
 
                             key, subkey = jrandom.split(key)    
                             results_of_optimisation = optimise_allocation_of_beams(satellite_position,
@@ -382,6 +382,7 @@ if __name__ == "__main__":
                             pkl.dump(con_sweep, f)
                             f.flush()
                             os.fsync(f.fileno())
+                            print(f"Iteration {idx+1} of {sweeping_parameters['iterations']} for reconfig_period={reconfig_period}, time_step={time_step}, rmin={rmin}, O={o} finished.")
 
 
     print("Sweep finished and saved to file.")
