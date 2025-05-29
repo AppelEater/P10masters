@@ -30,7 +30,7 @@ sweeping_parameters = {
                                                         [0.3, 1-0.3]]),
                                             jnp.array([[1-0.07, 0.07], # Transition probability matrix with a 10th of the probabiltiy for transition.
                                                         [0.03, 1-0.03 ]]) ], # Transition probability matrix 
-    "O" : [2, 5],
+    "O" : [2],
     "iterations" : 15 # Number of iterations for the sweep
 }
 
@@ -360,7 +360,7 @@ if __name__ == "__main__":
                         con_sweep = {"reconfig_period": reconfig_period, "time_step": time_step, "rmin": rmin, "O": o, "user_state_transition_probability": sweeping_parameters["user_state_transition_probability"]}
                         data = []
                                             
-                        for iter in range(sweeping_parameters["iterations"]):
+                        for idx, iter in enumerate(sweeping_parameters["iterations"]):
 
                             key, subkey = jrandom.split(key)    
                             results_of_optimisation = optimise_allocation_of_beams(satellite_position,
@@ -374,15 +374,14 @@ if __name__ == "__main__":
                                                                 sweeping_parameters["user_state_transition_probability"],
                                                                     key)
                         
-                            # Save the results
-                            data.append(results_of_optimisation)
-                    
 
-                        con_sweep["data"] = data
-                        # Save the results
-                        pkl.dump(con_sweep, f)
-                        f.flush()
-                        os.fsync(f.fileno())
+
+                            con_sweep["data"] = results_of_optimisation
+                            con_sweep["iteration"] = idx
+                            # Save the results
+                            pkl.dump(con_sweep, f)
+                            f.flush()
+                            os.fsync(f.fileno())
 
 
     print("Sweep finished and saved to file.")
