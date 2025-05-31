@@ -30,7 +30,7 @@ sweeping_parameters = {
                                                         [0.3, 1-0.3]]),
                                             jnp.array([[1-0.07, 0.07], # Transition probability matrix with a 10th of the probabiltiy for transition.
                                                         [0.03, 1-0.03 ]]) ], # Transition probability matrix 
-    "O" : [2],
+    "O" : [2, 5],
     "iterations" : 15 # Number of iterations for the sweep
 }
 
