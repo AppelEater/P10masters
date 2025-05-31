@@ -156,7 +156,7 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
     initial_demand = []
     mode_demand = []
     expected_demand = []
-
+    total_number_users_in_cell = []
 
     for x in range(len(cells)):
         for y in range(len(cells[x])):
@@ -164,6 +164,7 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
                 position = pl.spherical_to_cartesian(earth_radius, cells[x][y].lat, cells[x][y].longi)
                 distance.append(pl.calculate_distance(position[0], position[1],position[2], satellite_position))
                 initial_demand.append(pl.calculate_demand_of_cell(cells[x][y]))
+                total_number_users_in_cell.append(cells[x][y].density)
 
                 for A_type in user_state_transition_probabilities:
                     # Calculate the expected value of the demand for each cell
@@ -297,15 +298,17 @@ def optimise_allocation_of_beams(satellite_position, satellite_transmit_power_pe
             "pred demand" : demands,
             "rates": rates,
             "schedule": schedule,
+            "achieved_capactiy" : achieved_capacity,
             "min_capacity": min_capacity,
             "avg_capacity": avg_capacity,
             "min_CD": min_CD,
             "avg_CD": avg_CD,
-            "Average_unmet_demand": Average_unmet_demand,
-            "maximum_unmet_demand": maximum_unmet_demand,
-            "disconnect_times": disconnect_times,
-            "total_users": total_users,
-            "cells" : cells
+            "Average_unmet_demand" : Average_unmet_demand,
+            "maximum_unmet_demand" : maximum_unmet_demand,
+            "disconnect_times" : disconnect_times,
+            "total_users" : total_users,
+            "total number_of_users_in_cell" : total_number_users_in_cell
+            #"cells" : cells
         }
 
 
@@ -374,14 +377,18 @@ if __name__ == "__main__":
                                                                     key)
                         
 
+                            for key, value in results_of_optimisation.items():
+                                con_sweep["label"] = key
+                                for key2, value2 in value.items():
+                                    con_sweep[key2] = value2
 
-                            con_sweep["data"] = results_of_optimisation
-                            con_sweep["iteration"] = idx
-                            # Save the results
-                            pkl.dump(con_sweep, f)
-                            f.flush()
-                            os.fsync(f.fileno())
+                                #con_sweep["data"] = results_of_optimisation
+                                con_sweep["iteration"] = idx
+                                # Save the results
+                                pkl.dump(con_sweep, f)
+                                f.flush()
+                                os.fsync(f.fileno())
+                            
                             print(f"Iteration {idx+1} of {sweeping_parameters['iterations']} for reconfig_period={reconfig_period}, time_step={time_step}, rmin={rmin}, O={o} finished.")
-
 
     print("Sweep finished and saved to file.")
