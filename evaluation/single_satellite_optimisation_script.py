@@ -377,8 +377,8 @@ if __name__ == "__main__":
                                                                     key)
                         
 
-                            for key, value in results_of_optimisation.items():
-                                con_sweep["label"] = key
+                            for key1, value in results_of_optimisation.items():
+                                con_sweep["label"] = key1
                                 for key2, value2 in value.items():
                                     con_sweep[key2] = value2
 
