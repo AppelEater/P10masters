@@ -1,7 +1,7 @@
 # P10 Masters Project Files and Scripts
 
--- User_model_experiments_single_satellite
-- Implements a prilimanry user model
-- Implements a satellite, with an orbit and a MIMO system
-- Implements a beam hopping method
+Results sweep results_sweep1748721538 is the final result
 
+evaluation/single_satellite_optimisation_script.py is the optimisation script.
+
+The visulizers folder is for the visulisations.
